@@ -1172,14 +1172,19 @@ namespace NetMQ.Core.Transports
 
         PushMsgResult ProcessHandshakeCommand (ref Msg msg)
         {
+            // m_mechanism may be torn down concurrently when the engine is
+            // cancelled/closed mid-handshake; treat that as a handshake error.
+            if (m_mechanism == null)
+                return PushMsgResult.Error;
+
             var result = m_mechanism.ProcessHandshakeCommand(ref msg);
-            if (result == PushMsgResult.Ok) 
+            if (result == PushMsgResult.Ok)
             {
                 if (m_mechanism.Status == MechanismStatus.Ready)
                     MechanismReady();
                 else if (m_mechanism.Status == MechanismStatus.Error)
                     return PushMsgResult.Error;
-                
+
                 if (m_sendingState == SendState.Idle)
                 {
                     m_sendingState = SendState.Active;
@@ -1189,9 +1194,12 @@ namespace NetMQ.Core.Transports
 
             return result;
         }
-        
+
         void MechanismReady ()
         {
+            if (m_mechanism == null)
+                return;
+
             if (m_options.HeartbeatInterval > 0)
             {
                 m_ioObject.AddTimer(m_options.HeartbeatInterval, HeartbeatIntervalTimerId);
